@@ -1,0 +1,3 @@
+[submodule "digital-ocean-cluster"]
+	path = digital-ocean-cluster
+	url = https://github.com/AndriyAntonenko/do-docker-swarm-cluster-boilerplaite

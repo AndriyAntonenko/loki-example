@@ -1,0 +1,91 @@
+version: "3.8"
+
+# To use Grafana Loki, you need to install the Docker driver plugin.
+# docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+#
+# Then create config for loki
+# docker config create loki_config loki-config.yaml
+services:
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - loki
+    volumes:
+      - grafana-data:/var/lib/grafana
+    secrets:
+      - grafana_admin_user
+      - grafana_admin_password
+    environment:
+      - GF_SECURITY_ADMIN_USER__FILE=/run/secrets/grafana_admin_user
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_password
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      replicas: 1
+    logging:
+      driver: json-file
+
+  loki:
+    image: grafana/loki:latest
+    command:
+      - -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    networks:
+      - loki
+    configs:
+      - source: loki_config
+        target: /etc/loki/loki-config.yaml
+    logging:
+      driver: json-file
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  server:
+    image: nginx
+    ports:
+      - 8080:80
+    networks:
+      - net
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.role == worker
+    logging:
+      driver: loki
+      options:
+        loki-url: "${LOKI_URL:-http://127.0.0.1:3100}/loki/api/v1/push"
+        loki-retries: "5"
+        loki-batch-size: "400"
+
+networks:
+  loki:
+    driver: overlay
+
+  net:
+    driver: overlay
+
+volumes:
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+configs:
+  loki_config:
+    external: true
+
+secrets:
+  grafana_admin_password:
+    external: true
+  grafana_admin_user:
+    external: true
